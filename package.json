@@ -13,14 +13,9 @@
     "type": "git",
     "url": "git+https://github.com/jonkinesis/replicate-proxy.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/jonkinesis/replicate-proxy/issues"
-  },
-  "homepage": "https://github.com/jonkinesis/replicate-proxy#readme",
   "dependencies": {
-    "next": "^15.3.2"
+    "next": "^13.4.7",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   }
 }
