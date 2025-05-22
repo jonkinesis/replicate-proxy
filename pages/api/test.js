@@ -1,5 +1,7 @@
 export default function handler(req, res) {
-  console.log("API test route hit");
-  res.status(200).json({ message: "API route works!" });
+  res.status(200).json({
+    message: "✅ This is a test endpoint. API works! Use /api/replicate for actual content generation."
+  });
 }
+
 
