@@ -1,50 +1,43 @@
-import fetch from "node-fetch";
-
 export default async function handler(req, res) {
-  // Validate method
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Only POST allowed" });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { model, prompt, ...otherParams } = req.body;
+  const { model, prompt, guidance } = req.body;
 
-  if (!model) {
-    return res.status(400).json({ error: "Missing model parameter" });
-  }
-  if (!prompt) {
-    return res.status(400).json({ error: "Missing prompt parameter" });
+  if (!model || !prompt) {
+    return res.status(400).json({ error: "Missing required fields: model and prompt" });
   }
 
   try {
-    // Build Replicate API body
-    const body = {
-      input: { prompt, ...otherParams }
-    };
-
     const response = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.REPLICATE_API_TOKEN}`,
+        "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
         "Content-Type": "application/json",
-        "Prefer": "wait", // Wait for the prediction to complete before returning
+        "Prefer": "wait"
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        input: {
+          prompt,
+          ...(guidance !== undefined && { guidance }),
+        }
+      }),
     });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`Replicate API error: ${response.status} - ${errorBody}`);
+    }
 
     const data = await response.json();
 
-    if (!response.ok) {
-      console.error("Replicate API error:", data);
-      return res.status(500).json({ error: "Failed to generate image", details: data });
-    }
-
-    // Send back the full prediction response from Replicate
     return res.status(200).json(data);
 
   } catch (error) {
-    console.error("Fetch error:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
+    return res.status(500).json({ error: error.message });
   }
 }
+
 
 
