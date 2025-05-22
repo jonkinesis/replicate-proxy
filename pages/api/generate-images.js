@@ -1,48 +1,49 @@
-// pages/api/generate-images.js
-
-import Replicate from "replicate";
-
-// Initialize Replicate with your API token from environment variables
-const replicate = new Replicate({
-  auth: process.env.REPLICATE_API_TOKEN,
-});
+import fetch from "node-fetch";
 
 export default async function handler(req, res) {
-  // Handle CORS preflight
-  if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    return res.status(200).end();
+  // Validate method
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Only POST allowed" });
   }
 
-  // Set CORS header for main request
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const { model, prompt, ...otherParams } = req.body;
+
+  if (!model) {
+    return res.status(400).json({ error: "Missing model parameter" });
+  }
+  if (!prompt) {
+    return res.status(400).json({ error: "Missing prompt parameter" });
+  }
 
   try {
-    const { model = "black-forest-labs/flux-dev", prompt, guidance = 3.5 } = req.body;
+    // Build Replicate API body
+    const body = {
+      input: { prompt, ...otherParams }
+    };
 
-    if (!prompt) {
-      return res.status(400).json({ error: "Missing 'prompt' parameter" });
+    const response = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.REPLICATE_API_TOKEN}`,
+        "Content-Type": "application/json",
+        "Prefer": "wait", // Wait for the prediction to complete before returning
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("Replicate API error:", data);
+      return res.status(500).json({ error: "Failed to generate image", details: data });
     }
 
-    const input = { prompt, guidance };
+    // Send back the full prediction response from Replicate
+    return res.status(200).json(data);
 
-    console.log("➡️ Generating with model:", model);
-    console.log("➡️ Input:", input);
-
-    const output = await replicate.run(model, { input });
-
-    console.log("✅ Replicate output:", output);
-
-    if (!output || output.length === 0) {
-      return res.status(500).json({ error: "Replicate returned no output" });
-    }
-
-    res.status(200).json({ output });
   } catch (error) {
-    console.error("❌ Error calling Replicate:", error);
-    res.status(500).json({ error: error.message || "Unknown error generating image" });
+    console.error("Fetch error:", error);
+    return res.status(500).json({ error: "Internal Server Error" });
   }
 }
 
