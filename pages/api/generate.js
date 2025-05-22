@@ -1,74 +1,50 @@
+import fetch from "node-fetch";
+
 export default async function handler(req, res) {
-  // Enable CORS
-  res.setHeader("Access-Control-Allow-Credentials", true);
+  // CORS headers — adjust "*" to your frontend domain in production!
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
-  res.setHeader("Access-Control-Allow-Headers", "X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  // Handle CORS preflight
+  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    return res.status(204).end();
   }
 
-  // Restrict to POST
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Only POST requests are allowed" });
+    return res.status(405).json({ error: "Only POST allowed" });
   }
 
-  const { model, prompt, ...rest } = req.body;
-
-  if (!process.env.REPLICATE_API_TOKEN) {
-    return res.status(500).json({ error: "Missing Replicate API token" });
-  }
+  const { model, input } = req.body;
 
   if (!model) {
     return res.status(400).json({ error: "Missing model name" });
   }
 
+  if (!process.env.REPLICATE_API_TOKEN) {
+    return res.status(500).json({ error: "Missing Replicate API token" });
+  }
+
   try {
-    // Step 1: Fetch latest version for the given model name
-    const versionRes = await fetch(`https://api.replicate.com/v1/models/${model}/versions`, {
-      headers: {
-        Authorization: `Token ${process.env.REPLICATE_API_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    });
-
-    const versionData = await versionRes.json();
-
-    if (!versionRes.ok) {
-      return res.status(versionRes.status).json({ error: versionData.detail || "Failed to fetch model version" });
-    }
-
-    const latestVersion = versionData?.results?.[0]?.id;
-    if (!latestVersion) {
-      return res.status(500).json({ error: "No version ID found for this model" });
-    }
-
-    // Step 2: Make prediction request
-    const predictionRes = await fetch("https://api.replicate.com/v1/predictions", {
+    const response = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
       method: "POST",
       headers: {
-        Authorization: `Token ${process.env.REPLICATE_API_TOKEN}`,
+        Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}`,
         "Content-Type": "application/json",
+        "Prefer": "wait"
       },
-      body: JSON.stringify({
-        version: latestVersion,
-        input: { prompt, ...rest },
-      }),
+      body: JSON.stringify({ input })
     });
 
-    const prediction = await predictionRes.json();
+    const data = await response.json();
 
-    if (!predictionRes.ok) {
-      return res.status(predictionRes.status).json({ error: prediction.detail || "Prediction failed" });
+    if (!response.ok) {
+      return res.status(response.status).json({ error: data.detail || "Replicate error" });
     }
 
-    return res.status(200).json(prediction);
-  } catch (err) {
-    console.error("Error:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(200).json(data);
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "Internal server error" });
   }
 }
-
 
